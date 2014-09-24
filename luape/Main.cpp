@@ -10,31 +10,44 @@ static std::unique_ptr<ScriptProcess> g_script_proc;
 int main(int argc, const char *argv[]) {
 	CoInitializeEx(NULL, COINIT_MULTITHREADED);
 
+	std::string main_path;
 	std::string package_path;
 
-#ifdef _DEBUG
-	package_path = __FILE__;
-	package_path = package_path.substr(0, package_path.find_last_of('\\')) + "\\scripts";
-#else
-	char path[MAX_PATH + 1];
-	path[0] = 0;
-	auto len = GetModuleFileNameA(NULL, path, sizeof(path));
-	if (len) {
-		char *pos = strrchr(path, '\\');
-		*pos = 0;
-		package_path = path;
-		package_path.append("\\scripts");
+	if (argc == 2) {
+		main_path = argv[1];
+		int pos = main_path.find_last_of("\\");
+		if (pos == std::string::npos) {
+			package_path = ".\\scripts";
+		}
+		else {
+			package_path = main_path.substr(0, pos) + "\\scripts";
+		}
 	}
 	else {
-		package_path = ".\\scripts";
-	}
-	
+#ifdef _DEBUG
+		package_path = __FILE__;
+		package_path = package_path.substr(0, package_path.find_last_of('\\')) + "\\scripts";
+#else
+		char path[MAX_PATH + 1];
+		path[0] = 0;
+		auto len = GetModuleFileNameA(NULL, path, sizeof(path));
+		if (len) {
+			char *pos = strrchr(path, '\\');
+			*pos = 0;
+			package_path = path;
+			package_path.append("\\scripts");
+		}
+		else {
+			package_path = ".\\scripts";
+		}
 #endif
+		main_path = package_path + "\\console.lua";
+	}
 
 	std::cout << "Package Directory: " << package_path.c_str() << std::endl;
 	std::cout << "================================================================================";
 
-	auto init = [&package_path]() -> int {
+	auto init = [&package_path, &main_path]() -> int {
 		g_script_proc.reset(new ScriptProcess((package_path + "\\?.lua").c_str()));
 
 		lua_State *L = g_script_proc->L();
@@ -43,7 +56,7 @@ int main(int argc, const char *argv[]) {
 			std::cerr << msg << std::endl;
 		});
 
-		g_script_proc->LoadScript((package_path + "\\console.lua").c_str(), 1);
+		g_script_proc->LoadScript(main_path.c_str(), 1);
 		lua_pushvalue(L, -1);
 		luaL_ref(L, LUA_REGISTRYINDEX);
 		return lua_gettop(L);
