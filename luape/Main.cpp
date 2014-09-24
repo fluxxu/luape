@@ -17,10 +17,10 @@ int main(int argc, const char *argv[]) {
 		main_path = argv[1];
 		int pos = main_path.find_last_of("\\");
 		if (pos == std::string::npos) {
-			package_path = ".\\scripts";
+			package_path = ".";
 		}
 		else {
-			package_path = main_path.substr(0, pos) + "\\scripts";
+			package_path = main_path.substr(0, pos);
 		}
 	}
 	else {
