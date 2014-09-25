@@ -11,6 +11,7 @@
 
 static HMODULE BaseImageModule;
 static size_t BaseImageModuleSize;
+static char CWD[MAX_PATH + 1];
 
 static uint32_t GetMaxReadableSize(void *ptr) {
 	MEMORY_BASIC_INFORMATION mbi;
@@ -31,6 +32,7 @@ void NativesRegister(lua_State *L) {
 	MODULEINFO mi = { 0 };
 	GetModuleInformation(GetCurrentProcess(), BaseImageModule, &mi, sizeof(mi));
 	BaseImageModuleSize = mi.SizeOfImage;
+	GetCurrentDirectoryA(MAX_PATH, CWD);
 
 	luaL_newmetatable(L, "luape.pattern");
 	lua_pushstring(L, "__gc");
@@ -189,6 +191,11 @@ void NativesRegister(lua_State *L) {
 
 
 	lua_newtable(L);
+	char cwd[MAX_PATH + 1];
+	GetCurrentDirectoryA(MAX_PATH, cwd);
+	lua_pushstring(L, "cwd");
+	lua_pushstring(L, cwd);
+	lua_rawset(L, -3);
 
 	luaL_Reg natives[] = {
 		{
@@ -258,6 +265,7 @@ void NativesRegister(lua_State *L) {
 				} else {
 					lua_pushnil(L);
 				}
+				SetCurrentDirectoryA(CWD);
 				return 1;
 			}
 		},
@@ -378,12 +386,5 @@ void NativesRegister(lua_State *L) {
 	};
 
 	luaL_setfuncs(L, natives, 0);
-
-	char cwd[MAX_PATH + 1];
-	GetCurrentDirectoryA(MAX_PATH, cwd);
-	lua_pushstring(L, "cwd");
-	lua_pushstring(L, cwd);
-	lua_rawset(L, -3);
-
 	lua_setglobal(L, "luape");
 }
