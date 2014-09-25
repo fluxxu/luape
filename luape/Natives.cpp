@@ -378,5 +378,12 @@ void NativesRegister(lua_State *L) {
 	};
 
 	luaL_setfuncs(L, natives, 0);
+
+	char cwd[MAX_PATH + 1];
+	GetCurrentDirectoryA(MAX_PATH, cwd);
+	lua_pushstring(L, "cwd");
+	lua_pushstring(L, cwd);
+	lua_rawset(L, -3);
+
 	lua_setglobal(L, "luape");
 }
