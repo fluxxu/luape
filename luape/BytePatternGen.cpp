@@ -15,7 +15,7 @@ static size_t to_string(size_t len, DISASM & dasm, char *dst) {
 	char hex_map[] = "0123456789ABCDEF";
 	std::list<std::pair<size_t, size_t>> replaces;
 
-	auto find_replace_range = [len, &dasm](Int64 displacement) -> std::pair < size_t, size_t > {
+	auto find_replace_range = [len, &dasm](Int64 displacement, int size) -> std::pair < size_t, size_t > {
 		uint32_t target = *reinterpret_cast<uint32_t *>(&displacement);
 		auto ptr = reinterpret_cast<uint8_t *>(dasm.EIP);
 		auto orig_ptr = ptr;
@@ -43,13 +43,13 @@ static size_t to_string(size_t len, DISASM & dasm, char *dst) {
 	}
 	else {
 		auto need_strip = [](decltype(dasm.Argument1)& arg) -> bool {
-			return (arg.ArgType == MEMORY_TYPE && arg.Memory.Displacement != 0 && arg.Memory.BaseRegister == 0 && arg.Memory.IndexRegister == 0 && arg.Memory.Scale == 0);
+			return (arg.ArgType == MEMORY_TYPE && arg.Memory.Displacement != 0);
 		};
 
 		//arg1
 		if (dasm.Argument1.ArgType != NO_ARGUMENT) {
 			if (need_strip(dasm.Argument1)) {
-				auto range = find_replace_range(dasm.Argument1.Memory.Displacement);
+				auto range = find_replace_range(dasm.Argument1.Memory.Displacement, dasm.Argument1.ArgSize);
 				assert(range.second != 0);
 				replaces.push_back(range);
 			}
@@ -58,16 +58,16 @@ static size_t to_string(size_t len, DISASM & dasm, char *dst) {
 		//arg2
 		if (dasm.Argument2.ArgType != NO_ARGUMENT) {
 			if (need_strip(dasm.Argument2)) {
-				auto range = find_replace_range(dasm.Argument2.Memory.Displacement);
+				auto range = find_replace_range(dasm.Argument2.Memory.Displacement, dasm.Argument2.ArgSize);
 				assert(range.second != 0);
 				replaces.push_back(range);
 			}
 		}
 
-		//arg1
-		if (dasm.Argument2.ArgType != NO_ARGUMENT) {
-			if (need_strip(dasm.Argument2)) {
-				auto range = find_replace_range(dasm.Argument2.Memory.Displacement);
+		//arg3
+		if (dasm.Argument3.ArgType != NO_ARGUMENT) {
+			if (need_strip(dasm.Argument3)) {
+				auto range = find_replace_range(dasm.Argument3.Memory.Displacement, dasm.Argument1.ArgSize);
 				assert(range.second != 0);
 				replaces.push_back(range);
 			}

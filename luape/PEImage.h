@@ -115,6 +115,25 @@ public:
 
 		file_ = file;
 		map_ = map;
+
+		const char *filename = path.c_str();
+		char version[32];
+		auto rv = GetFileVersionInfoSizeA(filename, NULL);
+		if (rv) {
+			char *buffer = (char *)malloc(rv + 1);
+			if (GetFileVersionInfoA(filename, NULL, rv, buffer)) {
+				VS_FIXEDFILEINFO *pFixedInfo;	unsigned int infoLength;
+				if (VerQueryValueA(buffer, "\\", reinterpret_cast<LPVOID *>(&pFixedInfo), &infoLength)){
+					sprintf_s(version, "%u.%u.%u.%u",
+						pFixedInfo->dwFileVersionMS >> 0x10,
+						pFixedInfo->dwFileVersionMS & 0xFFFF,
+						pFixedInfo->dwFileVersionLS >> 0x10,
+						pFixedInfo->dwFileVersionLS & 0xFFFF);
+				}
+			}
+			free(buffer);
+			version_ = version;
+		}
 	}
 
 	uint8_t * FindPointerByRVA(uint32_t rva) {
@@ -154,6 +173,7 @@ public:
 	const uint8_t * data() const { return data_;}
 	uint32_t image_base() const { return image_base_; }
 	const std::vector<IMAGE_SECTION_HEADER *>& sections() { return sections_; }
+	const std::string& version() { return version_; }
 private:
 	HANDLE file_;
 	HANDLE map_;
@@ -161,4 +181,5 @@ private:
 	uint8_t *data_;
 	uint32_t image_base_;
 	std::vector<IMAGE_SECTION_HEADER *> sections_;
+	std::string version_;
 };

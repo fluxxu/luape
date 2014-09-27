@@ -91,6 +91,19 @@ void NativesRegister(lua_State *L) {
 		},
 
 		{
+			"getVersion", [](lua_State *L) -> int {
+				PEImage *image = *reinterpret_cast<PEImage **>(luaL_checkudata(L, 1, "luape.peimage"));
+				if (image->IsLoaded() && !image->version().empty()) {
+					lua_pushstring(L, image->version().c_str());
+				}
+				else {
+					lua_pushnil(L);
+				}
+				return 1;
+			}
+		},
+
+		{
 			"getSize", [](lua_State *L) -> int {
 				PEImage *image = *reinterpret_cast<PEImage **>(luaL_checkudata(L, 1, "luape.peimage"));
 				if (image->IsLoaded()) {
@@ -353,7 +366,14 @@ void NativesRegister(lua_State *L) {
 		{
 			"diasm", [](lua_State *L) -> int {
 				lua_Unsigned addr = luaL_checkunsigned(L, 1);
-				int lines = luaL_checkinteger(L, 2);
+				if (addr == 0) {
+					lua_pushnil(L);
+					return 1;
+				}
+				int lines = 20;
+				if (lua_gettop(L) >= 2 && !lua_isnil(L, 2)) {
+					lines = luaL_checkinteger(L, 2);
+				}
 
 				uint32_t size = GetMaxReadableSize((void *)addr);
 				lua_newtable(L);
@@ -376,6 +396,44 @@ void NativesRegister(lua_State *L) {
 					else {
 						error = true;
 					}
+				}
+
+				return 1;
+			}
+		},
+
+		{
+			"readPointerArray", [](lua_State *L) -> int {
+				lua_Unsigned addr = luaL_checkunsigned(L, 1);
+				if (addr == 0) {
+					lua_pushnil(L);
+					return 1;
+				}
+
+				lua_Unsigned max = luaL_checkinteger(L, 2);
+				if (max <= 0) {
+					lua_newtable(L);
+					return 1;
+				}
+				
+				uint32_t size = GetMaxReadableSize((void *)addr);
+				if (size % 4 > 0) {
+					size = size - (4 - (size % 4));
+				}
+
+				if (size == 0) {
+					lua_newtable(L);
+					return 1;
+				}
+
+				if (size > max * 4) {
+					size = max * 4;
+				}
+
+				lua_newtable(L);
+				for (uint32_t offset = 0; offset < size; offset += 4) {
+					lua_pushunsigned(L, *(uint32_t *)(addr + offset));
+					lua_rawseti(L, -2, offset / 4 + 1);
 				}
 
 				return 1;
