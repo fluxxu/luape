@@ -11,18 +11,29 @@
 static const int kMaxInstructions = 20;
 
 static size_t to_string(size_t len, DISASM & dasm, char *dst) {
-	size_t pos, write_pos = 0, opcode_size = len - dasm.Argument1.ArgSize - dasm.Argument2.ArgSize - dasm.Argument3.ArgSize;
+	size_t pos, write_pos = 0;;
 	char hex_map[] = "0123456789ABCDEF";
 	std::list<std::pair<size_t, size_t>> replaces;
 
-	auto find_replace_range = [len, &dasm](Int64 displacement, int size) -> std::pair < size_t, size_t > {
-		uint32_t target = *reinterpret_cast<uint32_t *>(&displacement);
+	auto get_size = [](Int64 value) -> size_t {
+		size_t size = 0;
+		if (value < 0) {
+			value = -value;
+		}
+		for (; value != 0; value = value >> 8, ++size);
+		return size;
+	};
+
+	auto find_replace_range = [len, &dasm, get_size](Int64 value) -> std::pair < size_t, size_t > {
+		auto opcode = dasm.Instruction.Opcode;
+		size_t op_size = opcode < 0xFF ? 1 : opcode < 0xFFFF ? 2 : 3;
+		size_t size = get_size(value);
+		uint8_t *target = reinterpret_cast<uint8_t *>(&value); //little-endian
 		auto ptr = reinterpret_cast<uint8_t *>(dasm.EIP);
 		auto orig_ptr = ptr;
-		for (; ptr < ptr + len - sizeof(target); ++ptr) {
-			uint32_t val = *reinterpret_cast<uint32_t *>(ptr);
-			if (val == target) {
-				return std::make_pair<size_t, size_t>(ptr - orig_ptr, sizeof(target));
+		for (ptr = ptr + op_size; ptr < ptr + len - size; ++ptr) {
+			if (memcmp(ptr, target, size) == 0) {
+				return std::pair<size_t, size_t>(ptr - orig_ptr, size);
 			}
 		}
 		return std::make_pair<size_t, size_t>(0, 0);
@@ -34,43 +45,59 @@ static size_t to_string(size_t len, DISASM & dasm, char *dst) {
 		}) != replaces.end();
 	};
 
-	//printf("arg1type: 0x%08X, arg2type: 0x%08X, d:0x%8X\n", dasm.Argument1.ArgType, dasm.Argument2.ArgType, dasm.Argument1.Memory.Displacement);
-	if (dasm.Instruction.BranchType || dasm.Argument1.ArgType == MEMORY_TYPE && dasm.Argument2.ArgType == CONSTANT_TYPE + ABSOLUTE_) {
-		Int32 opcode = dasm.Instruction.Opcode;
-		size_t opcode_size = opcode <= 0xFF ? 1 : opcode <= 0xFFFF ? 2 : 3;
-		size_t addr_size = len - opcode_size;
-		replaces.push_back(std::make_pair(opcode_size, addr_size));
-	}
-	else {
-		auto need_strip = [](decltype(dasm.Argument1)& arg) -> bool {
-			return (arg.ArgType == MEMORY_TYPE && arg.Memory.Displacement != 0);
-		};
+	/*
+	printf("immediat: 0x%llX, arg1type: 0x%08X:%d, arg2type: 0x%08X:%d, arg3type: 0x%08X:%d, d:0x%8X\n",
+	dasm.Instruction.Immediat,
+	dasm.Argument1.ArgType, dasm.Argument1.ArgSize,
+	dasm.Argument2.ArgType, dasm.Argument2.ArgSize,
+	dasm.Argument3.ArgType, dasm.Argument3.ArgSize,
+	dasm.Argument1.Memory.Displacement);
+	*/
+	auto mark_ranges = [&](decltype(dasm.Argument1)& arg) {
+		if (arg.ArgType == MEMORY_TYPE) {
+			if (arg.Memory.Displacement) {
+				auto range = find_replace_range(arg.Memory.Displacement);
+				if (range.second > 0) {
+					replaces.push_back(range);
+				}
+			}
 
-		//arg1
-		if (dasm.Argument1.ArgType != NO_ARGUMENT) {
-			if (need_strip(dasm.Argument1)) {
-				auto range = find_replace_range(dasm.Argument1.Memory.Displacement, dasm.Argument1.ArgSize);
-				assert(range.second != 0);
+			if (arg.Memory.IndexRegister) {
+				auto range = find_replace_range(arg.Memory.IndexRegister);
+				if (range.second > 0) {
+					replaces.push_back(range);
+				}
+			}
+		}
+		else if (arg.ArgType == CONSTANT_TYPE + RELATIVE_ || arg.ArgType == CONSTANT_TYPE + ABSOLUTE_){
+			auto range = find_replace_range(dasm.Instruction.Immediat);
+			if (range.second > 0) {
 				replaces.push_back(range);
 			}
+		}
+	};
+
+	if (dasm.Instruction.BranchType) {
+		auto opcode = dasm.Instruction.Opcode;
+		size_t op_size = opcode < 0xFF ? 1 : opcode < 0xFFFF ? 2 : 3;
+		if (len > op_size) {
+			replaces.push_back(std::pair<size_t, size_t>(op_size, len - op_size));
+		}
+	}
+	else {
+		//arg1
+		if (dasm.Argument1.ArgType != NO_ARGUMENT) {
+			mark_ranges(dasm.Argument1);
 		}
 
 		//arg2
 		if (dasm.Argument2.ArgType != NO_ARGUMENT) {
-			if (need_strip(dasm.Argument2)) {
-				auto range = find_replace_range(dasm.Argument2.Memory.Displacement, dasm.Argument2.ArgSize);
-				assert(range.second != 0);
-				replaces.push_back(range);
-			}
+			mark_ranges(dasm.Argument2);
 		}
 
 		//arg3
 		if (dasm.Argument3.ArgType != NO_ARGUMENT) {
-			if (need_strip(dasm.Argument3)) {
-				auto range = find_replace_range(dasm.Argument3.Memory.Displacement, dasm.Argument1.ArgSize);
-				assert(range.second != 0);
-				replaces.push_back(range);
-			}
+			mark_ranges(dasm.Argument3);
 		}
 	}
 
