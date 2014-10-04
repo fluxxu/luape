@@ -19,6 +19,7 @@ public:
 
 	void Unload() {
 		if (data_) {
+			UnmapViewOfFile(data_);
 			CloseHandle(map_);
 			CloseHandle(file_);
 			map_ = NULL;
@@ -63,6 +64,9 @@ public:
 		}
 
 		auto close_and_throw = [&](const char *what) {
+			if (data_) {
+				UnmapViewOfFile(data_);
+			}
 			CloseHandle(map);
 			CloseHandle(file);
 			file_ = 0;
