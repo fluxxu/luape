@@ -174,7 +174,14 @@ void NativesRegister(lua_State *L) {
 				PEImage *image = *reinterpret_cast<PEImage **>(luaL_checkudata(L, 1, "luape.peimage"));
 				if (image->IsLoaded()) {
 					Pattern *p = *reinterpret_cast<Pattern **>(luaL_checkudata(L, 2, "luape.pattern"));
-					const void *ptr = BytePattern::Find(p, image->data(), image->size());
+					lua_Unsigned from = 0;
+					if (lua_gettop(L) > 1) {
+						from = luaL_checkunsigned(L, 3);
+						if (from >= image->size()) {
+							return luaL_error(L, "out of image range");
+						}
+					}
+					const void *ptr = BytePattern::Find(p, image->data() + from, image->size() - from);
 					if (ptr) {
 						lua_pushunsigned(L, reinterpret_cast<const uint8_t *>(ptr)-image->data());
 					}
@@ -344,8 +351,15 @@ void NativesRegister(lua_State *L) {
 		{
 			"findPatternOffset", [](lua_State *L) -> int {
 				Pattern *p = *reinterpret_cast<Pattern **>(luaL_checkudata(L, 1, "luape.pattern"));
-				uint8_t *base = reinterpret_cast<uint8_t *>(BaseImageModule);
-				const void *ptr = BytePattern::Find(p, base, BaseImageModuleSize);
+				lua_Unsigned from = 0;
+				if (lua_gettop(L) > 1) {
+					from = luaL_checkunsigned(L, 2);
+					if (from >= BaseImageModuleSize) {
+						return luaL_error(L, "out of image range");
+					}
+				}
+				uint8_t *base = reinterpret_cast<uint8_t *>(BaseImageModule) + from;
+				const void *ptr = BytePattern::Find(p, base, BaseImageModuleSize - from);
 				if (ptr) {
 					lua_pushunsigned(L, reinterpret_cast<const uint8_t *>(ptr)-base);
 				}
@@ -434,6 +448,39 @@ void NativesRegister(lua_State *L) {
 				for (uint32_t offset = 0; offset < size; offset += 4) {
 					lua_pushunsigned(L, *(uint32_t *)(addr + offset));
 					lua_rawseti(L, -2, offset / 4 + 1);
+				}
+
+				return 1;
+			}
+		},
+
+		{
+			"readString", [](lua_State *L) -> int {
+				lua_Unsigned addr = luaL_checkunsigned(L, 1);
+				if (addr == 0) {
+					lua_pushnil(L);
+					return 1;
+				}
+
+				uint32_t size = GetMaxReadableSize((void *)addr);
+				if (size % 4 > 0) {
+					size = size - (4 - (size % 4));
+				}
+
+				if (size == 0) {
+					lua_pushnil(L);
+					return 1;
+				}
+
+				char *str = reinterpret_cast<char *>(addr);
+				size_t len;
+				for (len = 0; *str && len < size; ++len);
+
+				if (len == 0) {
+					lua_pushstring(L, "");
+				}
+				else {
+					lua_pushlstring(L, str, len);
 				}
 
 				return 1;
