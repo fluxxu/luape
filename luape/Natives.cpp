@@ -474,7 +474,7 @@ void NativesRegister(lua_State *L) {
 
 				char *str = reinterpret_cast<char *>(addr);
 				size_t len;
-				for (len = 0; *str && len < size; ++len);
+				for (len = 0; str[len] && len < size; ++len);
 
 				if (len == 0) {
 					lua_pushstring(L, "");
