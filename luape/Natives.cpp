@@ -175,7 +175,7 @@ void NativesRegister(lua_State *L) {
 				if (image->IsLoaded()) {
 					Pattern *p = *reinterpret_cast<Pattern **>(luaL_checkudata(L, 2, "luape.pattern"));
 					lua_Unsigned from = 0;
-					if (lua_gettop(L) > 1) {
+					if (lua_gettop(L) > 2) {
 						from = luaL_checkunsigned(L, 3);
 						if (from >= image->size()) {
 							return luaL_error(L, "out of image range");
