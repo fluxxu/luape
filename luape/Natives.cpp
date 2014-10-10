@@ -20,7 +20,7 @@ static uint32_t GetMaxReadableSize(void *ptr) {
 	}
 
 	DWORD protect = PAGE_GUARD | PAGE_NOCACHE | PAGE_NOACCESS;
-	if (mbi.State & MEM_FREE || !mbi.Protect & protect) {
+	if (mbi.State & MEM_FREE || mbi.Protect & protect) {
 		return 0;
 	}
 
@@ -56,7 +56,6 @@ void NativesRegister(lua_State *L) {
 					image->Load(path);
 				}
 				catch (const std::exception& e) {
-					delete image;
 					return luaL_error(L, "Load PE file failed: %s", e.what());
 				}
 				return 0;
