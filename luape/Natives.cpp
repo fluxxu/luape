@@ -388,26 +388,28 @@ void NativesRegister(lua_State *L) {
 					lines = luaL_checkinteger(L, 2);
 				}
 
-				uint32_t size = GetMaxReadableSize((void *)addr);
 				lua_newtable(L);
 				int rv = lua_gettop(L);
 
-				DISASM d;
-				int len, i = 0;
-				bool error = false;
-				memset(&d, 0, sizeof(DISASM));
-				d.EIP = (UIntPtr)addr;
-				d.SecurityBlock = size;
-				while (!error && i < lines) {
-					len = Disasm(&d);
-					if (len != UNKNOWN_OPCODE && len != OUT_OF_BLOCK) {
-						lua_pushstring(L, d.CompleteInstr);
-						lua_rawseti(L, rv, i + 1);
-						d.EIP += (UIntPtr)len;
-						++i;
-					}
-					else {
-						error = true;
+				uint32_t size = GetMaxReadableSize((void *)addr);
+				if (size > 0) {
+					DISASM d;
+					int len, i = 0;
+					bool error = false;
+					memset(&d, 0, sizeof(DISASM));
+					d.EIP = (UIntPtr)addr;
+					d.SecurityBlock = size;
+					while (!error && i < lines) {
+						len = Disasm(&d);
+						if (len != UNKNOWN_OPCODE && len != OUT_OF_BLOCK) {
+							lua_pushstring(L, d.CompleteInstr);
+							lua_rawseti(L, rv, i + 1);
+							d.EIP += (UIntPtr)len;
+							++i;
+						}
+						else {
+							error = true;
+						}
 					}
 				}
 
