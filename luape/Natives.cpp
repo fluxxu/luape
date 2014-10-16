@@ -464,9 +464,6 @@ void NativesRegister(lua_State *L) {
 				}
 
 				uint32_t size = GetMaxReadableSize((void *)addr);
-				if (size % 4 > 0) {
-					size = size - (4 - (size % 4));
-				}
 
 				if (size == 0) {
 					lua_pushnil(L);
@@ -483,6 +480,31 @@ void NativesRegister(lua_State *L) {
 				else {
 					lua_pushlstring(L, str, len);
 				}
+
+				return 1;
+			}
+		},
+
+		{
+			"readBytes", [](lua_State *L) -> int {
+				lua_Unsigned addr = luaL_checkunsigned(L, 1);
+				lua_Unsigned size = luaL_checkunsigned(L, 2);
+				if (addr == 0 || size == 0) {
+					lua_pushnil(L);
+					return 1;
+				}
+
+				uint32_t max_size = GetMaxReadableSize((void *)addr);
+
+				if (max_size == 0) {
+					lua_pushnil(L);
+					return 1;
+				}
+
+				size = min(size, max_size);
+
+				char *byte = reinterpret_cast<char *>(addr);
+				lua_pushlstring(L, byte, size);
 
 				return 1;
 			}
