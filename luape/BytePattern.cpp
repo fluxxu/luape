@@ -98,3 +98,39 @@ const void * BytePattern::Find(Pattern *pattern, const void *range_begin, size_t
 	}
 	return result;
 }
+
+bool BytePattern::Match(Pattern *pattern, const void *range_begin, size_t size) {
+	if (!pattern) {
+		return nullptr;
+	}
+
+	if (pattern->size() == 0) {
+		return nullptr;
+	}
+
+	const uint8_t *begin = reinterpret_cast<const uint8_t *>(range_begin);
+	bool mismatch = false;
+	int range_pos = 0;
+	for (size_t seg = 0; seg < pattern->size();) {
+		Segment& s = pattern->at(seg);
+		size_t seg_size = s.bytes.size();
+		if (range_pos + s.pos + seg_size >= size) {
+			mismatch = true;
+			break; //not found
+		}
+
+		if (memcmp(&s.bytes[0], begin + range_pos + s.pos, seg_size) == 0) {
+			if (seg < pattern->size() - 1) {
+				++seg;
+			}
+			else {
+				break; //found all segments
+			}
+		}
+		else {
+			mismatch = true;
+			break;
+		}
+	}
+	return !mismatch;
+}

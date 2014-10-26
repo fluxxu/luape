@@ -173,10 +173,16 @@ void NativesRegister(lua_State *L) {
 				PEImage *image = *reinterpret_cast<PEImage **>(luaL_checkudata(L, 1, "luape.peimage"));
 				if (image->IsLoaded()) {
 					Pattern *p = *reinterpret_cast<Pattern **>(luaL_checkudata(L, 2, "luape.pattern"));
-					lua_Unsigned from = 0;
+					lua_Unsigned from = 0, to = image->size();
 					if (lua_gettop(L) > 2) {
 						from = luaL_checkunsigned(L, 3);
 						if (from >= image->size()) {
+							return luaL_error(L, "out of image range");
+						}
+					}
+					if (lua_gettop(L) > 3) {
+						to = luaL_checkunsigned(L, 4);
+						if (to > image->size()) {
 							return luaL_error(L, "out of image range");
 						}
 					}
@@ -370,6 +376,16 @@ void NativesRegister(lua_State *L) {
 		},
 
 		{
+			"matchPattern", [](lua_State *L) -> int {
+				Pattern *p = *reinterpret_cast<Pattern **>(luaL_checkudata(L, 1, "luape.pattern"));
+				void *buffer = (void*)luaL_checkunsigned(L, 2);
+				lua_Unsigned buffer_size = max(luaL_checkunsigned(L, 3), GetMaxReadableSize(buffer));
+				lua_pushboolean(L, BytePattern::Match(p, buffer, buffer_size));
+				return 1;
+			}
+		},
+
+		{
 			"getBaseAddress", [](lua_State *L) -> int {
 				lua_pushunsigned(L, reinterpret_cast<uint32_t>(BaseImageModule));
 				return 1;
@@ -402,7 +418,9 @@ void NativesRegister(lua_State *L) {
 					while (!error && i < lines) {
 						len = Disasm(&d);
 						if (len != UNKNOWN_OPCODE && len != OUT_OF_BLOCK) {
-							lua_pushstring(L, d.CompleteInstr);
+							char *c;
+							for (c = d.CompleteInstr + strlen(d.CompleteInstr); c > d.CompleteInstr && *(c - 1) == ' '; c--);
+							lua_pushlstring(L, d.CompleteInstr, c - d.CompleteInstr);
 							lua_rawseti(L, rv, i + 1);
 							d.EIP += (UIntPtr)len;
 							++i;
