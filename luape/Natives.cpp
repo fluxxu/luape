@@ -406,6 +406,8 @@ void NativesRegister(lua_State *L) {
 
 				lua_newtable(L);
 				int rv = lua_gettop(L);
+				lua_newtable(L);
+				int map = lua_gettop(L);
 
 				uint32_t size = GetMaxReadableSize((void *)addr);
 				if (size > 0) {
@@ -422,6 +424,8 @@ void NativesRegister(lua_State *L) {
 							for (c = d.CompleteInstr + strlen(d.CompleteInstr); c > d.CompleteInstr && *(c - 1) == ' '; c--);
 							lua_pushlstring(L, d.CompleteInstr, c - d.CompleteInstr);
 							lua_rawseti(L, rv, i + 1);
+							lua_pushunsigned(L, d.EIP);
+							lua_rawseti(L, map, i + 1);
 							d.EIP += (UIntPtr)len;
 							++i;
 						}
@@ -431,7 +435,7 @@ void NativesRegister(lua_State *L) {
 					}
 				}
 
-				return 1;
+				return 2;
 			}
 		},
 
