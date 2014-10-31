@@ -20,11 +20,24 @@ static uint32_t GetMaxReadableSize(void *ptr) {
 	}
 
 	DWORD protect = PAGE_GUARD | PAGE_NOCACHE | PAGE_NOACCESS;
-	if (mbi.State & MEM_FREE || mbi.Protect & protect) {
+	if (mbi.State == MEM_FREE || mbi.State == MEM_RESERVE || mbi.Protect & protect) {
 		return 0;
 	}
 
 	return mbi.RegionSize - ((uint32_t)ptr - (uint32_t)mbi.BaseAddress);
+}
+
+static uint32_t GetMaxReadableSizeInImage(void *ptr, PEImage *image) {
+	if (!image->IsLoaded()) {
+		return 0;
+	}
+
+	uint32_t ptr_v = (uint32_t)ptr, image_base_v = (uint32_t)image->data();
+	if (!(ptr_v >= image_base_v && ptr_v < image_base_v + image->size())) {
+		return 0;
+	}
+
+	return image->size() - (ptr_v - image_base_v);
 }
 
 void NativesRegister(lua_State *L) {
@@ -197,6 +210,132 @@ void NativesRegister(lua_State *L) {
 				else {
 					lua_pushnil(L);
 				}
+				return 1;
+			}
+		},
+
+		{
+			"readPointerArray", [](lua_State *L) -> int {
+				PEImage *image = *reinterpret_cast<PEImage **>(luaL_checkudata(L, 1, "luape.peimage"));
+				if (!image->IsLoaded()) {
+					lua_newtable(L);
+					return 1;
+				}
+
+				lua_Unsigned addr = luaL_checkunsigned(L, 2);
+				if (addr == 0) {
+					lua_pushnil(L);
+					return 1;
+				}
+
+				lua_Unsigned max = luaL_checkinteger(L, 3);
+				if (max <= 0) {
+					lua_newtable(L);
+					return 1;
+				}
+
+				uint32_t size = GetMaxReadableSizeInImage((void *)addr, image);
+				if (size % 4 > 0) {
+					size = size - (4 - (size % 4));
+				}
+
+				if (size == 0) {
+					lua_newtable(L);
+					return 1;
+				}
+
+				if (size > max * 4) {
+					size = max * 4;
+				}
+
+				lua_newtable(L);
+				for (uint32_t offset = 0; offset < size; offset += 4) {
+					lua_pushunsigned(L, *(uint32_t *)(addr + offset));
+					lua_rawseti(L, -2, offset / 4 + 1);
+				}
+
+				return 1;
+			}
+		},
+
+		{
+			"readByteArray", [](lua_State *L) -> int {
+				PEImage *image = *reinterpret_cast<PEImage **>(luaL_checkudata(L, 1, "luape.peimage"));
+				if (!image->IsLoaded()) {
+					lua_newtable(L);
+					return 1;
+				}
+
+				lua_Unsigned addr = luaL_checkunsigned(L, 2);
+				if (addr == 0) {
+					lua_pushnil(L);
+					return 1;
+				}
+
+				lua_Unsigned max = luaL_checkinteger(L, 3);
+				if (max <= 0) {
+					lua_newtable(L);
+					return 1;
+				}
+
+				uint32_t size = GetMaxReadableSizeInImage((void *)addr, image);
+
+				if (size == 0) {
+					lua_newtable(L);
+					return 1;
+				}
+
+				if (size > max) {
+					size = max;
+				}
+
+				lua_newtable(L);
+				for (uint32_t offset = 0; offset < size; offset++) {
+					lua_pushunsigned(L, *(uint8_t *)(addr + offset));
+					lua_rawseti(L, -2, offset + 1);
+				}
+
+				return 1;
+			}
+		},
+
+		{
+			"readString", [](lua_State *L) -> int {
+				PEImage *image = *reinterpret_cast<PEImage **>(luaL_checkudata(L, 1, "luape.peimage"));
+				if (!image->IsLoaded()) {
+					lua_pushnil(L);
+					return 1;
+				}
+
+				lua_Unsigned addr = luaL_checkunsigned(L, 2);
+				if (addr == 0) {
+					lua_pushnil(L);
+					return 1;
+				}
+
+				uint32_t size = GetMaxReadableSizeInImage((void *)addr, image);
+
+				if (size == 0) {
+					lua_pushnil(L);
+					return 1;
+				}
+
+				if (lua_gettop(L) > 2) {
+					lua_Unsigned limit = luaL_checkunsigned(L, 3);
+					size = min(limit, size);
+				}
+
+				char *str = reinterpret_cast<char *>(addr);
+				size_t len;
+				for (len = 0; len < size && str[len]; ++len);
+
+				if (len == 0) {
+					lua_pushstring(L, "");
+				}
+				else {
+					lua_pushlstring(L, str, len);
+				}
+
 				return 1;
 			}
 		},
@@ -478,7 +617,43 @@ void NativesRegister(lua_State *L) {
 		},
 
 		{
+			"readByteArray", [](lua_State *L) -> int {
+				lua_Unsigned addr = luaL_checkunsigned(L, 1);
+				if (addr == 0) {
+					lua_pushnil(L);
+					return 1;
+				}
+
+				lua_Unsigned max = luaL_checkinteger(L, 2);
+				if (max <= 0) {
+					lua_newtable(L);
+					return 1;
+				}
+
+				uint32_t size = GetMaxReadableSize((void *)addr);
+
+				if (size == 0) {
+					lua_newtable(L);
+					return 1;
+				}
+
+				if (size > max) {
+					size = max;
+				}
+
+				lua_newtable(L);
+				for (uint32_t offset = 0; offset < size; offset ++) {
+					lua_pushunsigned(L, *(uint8_t *)(addr + offset));
+					lua_rawseti(L, -2, offset + 1);
+				}
+
+				return 1;
+			}
+		},
+
+		{
 			"readString", [](lua_State *L) -> int {
+
 				lua_Unsigned addr = luaL_checkunsigned(L, 1);
 				if (addr == 0) {
 					lua_pushnil(L);
@@ -492,9 +667,14 @@ void NativesRegister(lua_State *L) {
 					return 1;
 				}
 
+				if (lua_gettop(L) > 1) {
+					lua_Unsigned limit = luaL_checkunsigned(L, 2);
+					size = min(limit, size);
+				}
+
 				char *str = reinterpret_cast<char *>(addr);
 				size_t len;
-				for (len = 0; str[len] && len < size; ++len);
+				for (len = 0; len < size && str[len]; ++len);
 
 				if (len == 0) {
 					lua_pushstring(L, "");
