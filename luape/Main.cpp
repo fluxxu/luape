@@ -53,7 +53,7 @@ int main(int argc, const char *argv[]) {
 		lua_State *L = g_script_proc->L();
 		NativesRegister(L);
 		g_script_proc->set_error_handler([](const char *msg) {
-			std::cerr << msg << std::endl;
+			std::cout << msg << std::endl;
 		});
 
 		g_script_proc->LoadScript(main_path.c_str(), 1);

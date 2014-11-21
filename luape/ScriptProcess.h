@@ -63,7 +63,9 @@ public:
 	lua_State* L() { return this->master_; }
 	void set_error_handler(ScriptProcessErrorHandler v){ this->error_handler_ = v; };
 private:
-	void ProcessError(lua_State* L);
+	int errfunc_;
+	static int ErrorHandler(lua_State *L);
+	void ProcessError(lua_State *L);
 
 	lua_State* master_;
 	ScriptProcessErrorHandler error_handler_;

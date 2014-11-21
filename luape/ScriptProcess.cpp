@@ -14,6 +14,10 @@ ScriptProcess::ScriptProcess(ScriptGetTimeInterface get_time) {
 	lua_State* L = this->master_ = luaL_newstate();
 
 	luaL_openlibs(L);
+
+	lua_pushlightuserdata(L, this);
+	lua_pushcclosure(L, ErrorHandler, 1);
+	errfunc_ = lua_gettop(L);
 }
 
 ScriptProcess::ScriptProcess(const char * require_path, ScriptGetTimeInterface get_time) : ScriptProcess(get_time) {
@@ -29,6 +33,12 @@ ScriptProcess::ScriptProcess(const char * require_path, ScriptGetTimeInterface g
 
 ScriptProcess::~ScriptProcess() {
 	lua_close(this->master_);
+}
+
+int ScriptProcess::ErrorHandler(lua_State *L) {
+	ScriptProcess *process = (ScriptProcess *)lua_touserdata(L, lua_upvalueindex(1));
+	process->ProcessError(L);
+	return 0;
 }
 
 void ScriptProcess::RegisterNatives(const struct luaL_Reg* natives, const char* libname) {
@@ -53,9 +63,7 @@ void ScriptProcess::Call(int nargs, int nresults) {
 		return;
 	}
 
-	if (lua_pcall(this->master_, nargs, nresults, 0) != LUA_OK) {
-		this->ProcessError(this->master_);
-	}
+	lua_pcall(this->master_, nargs, nresults, errfunc_);
 }
 
 //函数在栈顶，运行完出栈
@@ -81,9 +89,6 @@ void ScriptProcess::ThreadExec() {
 	else if (result == LUA_YIELD) {
 		this->thread_ref_map_[L] = ref_thread;
 	}
-	else {
-		this->ProcessError(L);
-	}
 }
 
 bool ScriptProcess::LoadScript(const char* filename, int ret) {
@@ -96,12 +101,8 @@ bool ScriptProcess::LoadScript(const char* filename, int ret) {
 	if (lua_isnil(this->master_, -1)) {
 		return false;
 	}
-
-	int rv = lua_pcall(this->master_, 0, ret, 0);
-	if (rv != LUA_OK) {
-		this->ProcessError(L);
-	}
-	return true;
+	
+	return lua_pcall(this->master_, 0, ret, errfunc_) == LUA_OK;
 }
 
 //Callback在栈顶, 加入完毕以后清出栈
@@ -161,9 +162,6 @@ void ScriptProcess::Tick(float time) {
 			else if (result == LUA_YIELD) {
 				//如果继续Sleep,那么只删除当前的记录，继续保持thread的引用
 			}
-			else {
-				this->ProcessError(L);
-			}
 			//无论如何都要删除当前的记录，因为时间必定不一样
 			list->erase(iter_list++);
 		}
@@ -192,14 +190,13 @@ void ScriptProcess::ExecuteCallbacks(uint32_t type) {
 
 void ScriptProcess::ProcessError(lua_State* L) {
 	if (lua_isstring(L, -1) && NULL != this->error_handler_) {
-		this->error_handler_(lua_tostring(L, -1));
-	}
-	lua_pop(L, 1);
+		std::string errmsg = lua_tostring(L, -1);
+		luaL_traceback(L, L, NULL, 1);
+		errmsg.append("\n");
+		errmsg.append(lua_tostring(L, -1));
+		lua_pop(L, 1);
 
-	lua_getglobal(L, "debug");
-	lua_pushstring(L, "traceback");
-	lua_rawget(L, -2);
-	lua_call(L, 0, 1);
-	OutputDebugStringA(lua_tostring(L, -1));
+		this->error_handler_(errmsg.c_str());
+	}
 	lua_pop(L, 1);
 }
